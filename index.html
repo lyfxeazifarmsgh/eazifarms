@@ -1770,23 +1770,31 @@ function syncToCloud(){
 function doCloudSync(){
   if(!supa) return;
   showSyncStatus('syncing');
+  function safeSync(p){ return p.then(function(r){return r;}).catch(function(e){return {error:e};}); }
   var promises = [
-    syncTable('entries',        entries.map(mapEntry)),
-    syncTable('pending_entries',pendingEntries.map(mapEntry)),
-    syncTable('workers',        workers.map(mapWorker)),
-    syncTable('sales_debts',    salesDebts.map(mapSaleDebt)),
+    safeSync(syncTable('entries',        entries.map(mapEntry))),
+    safeSync(syncTable('pending_entries',pendingEntries.map(mapEntry))),
+    safeSync(syncTable('workers',        workers.map(mapWorker))),
+    safeSync(syncTable('sales_debts',    salesDebts.map(mapSaleDebt))),
+    safeSync(syncTable('animals',        animals.map(mapAnimal))),
+    safeSync(syncTable('partner_animals',partnerAnimals.map(mapPartnerAnimal))),
+    safeSync(syncPins()),
   ];
-  Promise.all(promises).then(function(){
-    showSyncStatus('ok');
-  }).catch(function(e){
-    console.log('Sync error:', e);
-    showSyncStatus('error');
+  Promise.all(promises).then(function(results){
+    var bad=results.filter(function(r){return r&&r.error;});
+    if(bad.length){ console.log('Sync problems:', bad.map(function(r){return r.error.message||r.error;})); showSyncStatus('error'); }
+    else showSyncStatus('ok');
   });
 }
 
 function syncTable(table, rows){
-  if(!rows.length) return Promise.resolve();
+  if(!rows.length) return Promise.resolve({data:null});
   return supa.from(table).upsert(rows, {onConflict:'id'});
+}
+function syncPins(){
+  if(!PINS||!Object.keys(PINS).length) return Promise.resolve({data:null});
+  var rows=Object.keys(PINS).map(function(r){return {role:r,pin:PINS[r]};});
+  return supa.from('app_pins').upsert(rows, {onConflict:'role'});
 }
 
 function mapEntry(e){
@@ -1803,6 +1811,14 @@ function mapSaleDebt(r){
     animal_type:r.animalType||'',customer:r.customer,phone:r.phone||'',
     amount:r.amount,paid:r.paid,balance:r.balance,
     date:r.date,due_date:r.due||'',notes:r.notes||'',status:r.status};
+}
+function mapAnimal(a){
+  return {id:a.id,tag:a.tag||'',type:a.type||'',breed:a.breed||'',sex:a.sex||'',
+    date:a.date||'',value:a.value||0,health:a.health||'',notes:a.notes||'',photo:a.photo||null};
+}
+function mapPartnerAnimal(a){
+  return {id:a.id,tag:a.tag||'',type:a.type||'',breed:a.breed||'',sex:a.sex||'',
+    date:a.date||'',value:a.value||0,health:a.health||'',notes:a.notes||'',photo:a.photo||null,owner:a.owner||'partner'};
 }
 
 function showSyncStatus(status){
@@ -1826,44 +1842,73 @@ function showSyncStatus(status){
 // ── Load data from cloud on startup ──
 function loadFromCloud(){
   if(!supa){ loadFromLocal(); return; }
+  // Load whatever is on this device first, so nothing is blank while the cloud responds
+  loadFromLocal();
   showSyncStatus('syncing');
   var status = document.getElementById('auth-sync-status');
   if(status) status.textContent = 'Connecting to cloud...';
+  // Wrap each query so one failing table can't stop the others
+  function safe(p){ return p.then(function(r){return r;}).catch(function(e){return {data:null,error:e};}); }
   Promise.all([
-    supa.from('entries').select('*').order('created_at',{ascending:false}),
-    supa.from('pending_entries').select('*').order('created_at',{ascending:false}),
-    supa.from('workers').select('*').order('created_at',{ascending:true}),
-    supa.from('sales_debts').select('*').order('created_at',{ascending:false}),
-    supa.from('app_pins').select('*'),
+    safe(supa.from('entries').select('*').order('created_at',{ascending:false})),
+    safe(supa.from('pending_entries').select('*').order('created_at',{ascending:false})),
+    safe(supa.from('workers').select('*').order('created_at',{ascending:true})),
+    safe(supa.from('sales_debts').select('*').order('created_at',{ascending:false})),
+    safe(supa.from('app_pins').select('*')),
+    safe(supa.from('invoices').select('*').order('created_at',{ascending:false})),
+    safe(supa.from('animals').select('*').order('created_at',{ascending:false})),
+    safe(supa.from('partner_animals').select('*').order('created_at',{ascending:false}))
   ]).then(function(results){
-    var entRes=results[0], pendRes=results[1], wkRes=results[2], sdRes=results[3], pinRes=results[4];
+    var entRes=results[0], pendRes=results[1], wkRes=results[2], sdRes=results[3], pinRes=results[4], invRes=results[5], anRes=results[6], panRes=results[7];
+    var problems=[];
+    results.forEach(function(r){ if(r&&r.error) problems.push(r.error.message||'error'); });
     if(entRes.data && entRes.data.length>0){
       entries = entRes.data.map(function(e){return {id:e.id,type:e.type,date:e.date,cat:e.cat,amount:e.amount,desc:e.description,party:e.party,qty:e.qty,notes:e.notes,user:e.user_role,partnerName:e.partner_name};});
+      localStorage.setItem('ef_entries',JSON.stringify(entries));
     }
     if(pendRes.data && pendRes.data.length>0){
       pendingEntries = pendRes.data.map(function(e){return {id:e.id,type:e.type,date:e.date,cat:e.cat,amount:e.amount,desc:e.description,party:e.party,qty:e.qty,notes:e.notes,user:e.user_role,partnerName:e.partner_name,status:e.status};});
+      localStorage.setItem('ef_pending',JSON.stringify(pendingEntries));
     }
     if(wkRes.data && wkRes.data.length>0){
       workers = wkRes.data.map(function(w){return {id:w.id,name:w.name,role:w.role,pay:w.pay,phone:w.phone,network:w.network,lastPaid:w.last_paid};});
+      localStorage.setItem('ef_workers',JSON.stringify(workers));
     }
     if(sdRes.data && sdRes.data.length>0){
       salesDebts = sdRes.data.map(function(r){return {id:r.id,type:r.type,season:r.season,tags:r.tags,animalType:r.animal_type,customer:r.customer,phone:r.phone,amount:r.amount,paid:r.paid,balance:r.balance,date:r.date,due:r.due_date,notes:r.notes,status:r.status};});
+      localStorage.setItem('ef_salesDebts',JSON.stringify(salesDebts));
+    }
+    if(invRes.data && invRes.data.length>0){
+      invoices = invRes.data.map(function(r){
+        var items=[]; try{items=JSON.parse(r.items||'[]');}catch(e){}
+        return {id:r.id,invoice_number:r.invoice_number,customer_name:r.customer_name,
+          customer_phone:r.customer_phone,customer_address:r.customer_address,items:items,
+          subtotal:r.subtotal,discount:r.discount,total:r.total,amount_paid:r.amount_paid,
+          balance:r.balance,status:r.status,date:r.date,due_date:r.due_date,notes:r.notes,
+          season:r.season,created_by:r.created_by};
+      });
+      localStorage.setItem('ef_invoices',JSON.stringify(invoices));
     }
     if(pinRes.data){
       pinRes.data.forEach(function(p){ PINS[p.role]=p.pin; });
+      localStorage.setItem('ef_pins',JSON.stringify(PINS));
     }
-    // Save to local as backup
-    localStorage.setItem('ef_entries',JSON.stringify(entries));
-    localStorage.setItem('ef_workers',JSON.stringify(workers));
-    localStorage.setItem('ef_pending',JSON.stringify(pendingEntries));
-    localStorage.setItem('ef_salesDebts',JSON.stringify(salesDebts));
-    localStorage.setItem('ef_pins',JSON.stringify(PINS));
-    showSyncStatus('ok');
-    if(status) status.textContent = '';
-    console.log('Cloud data loaded: '+entries.length+' entries, '+workers.length+' workers');
-    // Re-render everything with fresh cloud data
+    if(anRes.data && anRes.data.length>0){
+      animals = anRes.data.map(function(a){return {id:a.id,tag:a.tag,type:a.type,breed:a.breed,sex:a.sex,date:a.date,value:a.value,health:a.health,notes:a.notes,photo:a.photo};});
+      localStorage.setItem('ef_animals',JSON.stringify(animals));
+    }
+    if(panRes.data && panRes.data.length>0){
+      partnerAnimals = panRes.data.map(function(a){return {id:a.id,tag:a.tag,type:a.type,breed:a.breed,sex:a.sex,date:a.date,value:a.value,health:a.health,notes:a.notes,photo:a.photo,owner:a.owner};});
+      localStorage.setItem('ef_partnerAnimals',JSON.stringify(partnerAnimals));
+    }
+    showSyncStatus(problems.length?'error':'ok');
+    if(status) status.textContent = problems.length ? 'Some data could not sync' : '';
+    if(problems.length) console.log('Cloud sync problems:', problems);
+    console.log('Cloud data loaded: '+entries.length+' entries, '+invoices.length+' invoices, '+workers.length+' workers');
+    // Re-render with whatever fresh cloud data arrived
     if(currentUser && currentUser!=='partner') renderAll();
     else if(currentUser==='partner') renderPartnerPortal();
+    if(typeof renderInvoices==='function') renderInvoices();
   }).catch(function(e){
     console.log('Cloud load failed, using local:', e);
     loadFromLocal();
@@ -2218,7 +2263,15 @@ function rejectEntry(id){
 // ============================================================
 var invItems=[];
 function getNextInvNumber(){
-  var n=parseInt(localStorage.getItem('ef_inv_n')||'0')+1;
+  // Base the next number on the highest invoice number we actually have
+  // (these now sync from the cloud), so different devices don't reuse numbers.
+  var max=0;
+  invoices.forEach(function(inv){
+    var m=/(\d+)\s*$/.exec(inv.invoice_number||'');
+    if(m){ var v=parseInt(m[1],10); if(v>max) max=v; }
+  });
+  var localN=parseInt(localStorage.getItem('ef_inv_n')||'0');
+  var n=Math.max(max,localN)+1;
   localStorage.setItem('ef_inv_n',n);
   return 'EF-INV-'+('000'+n).slice(-4);
 }
