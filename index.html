@@ -1964,6 +1964,23 @@ function subscribeToRealtime(){
     });
 }
 
+// Reliable cross-device sync: re-check the cloud on a timer and when the
+// app regains focus. Works even when the live WebSocket channel can't connect.
+var _autoRefreshTimer=null, _visBound=false;
+function startAutoRefresh(){
+  if(!supa) return;
+  if(_autoRefreshTimer) clearInterval(_autoRefreshTimer);
+  _autoRefreshTimer=setInterval(function(){
+    if(currentUser && !document.hidden) loadFromCloud();
+  },45000);
+  if(!_visBound){
+    _visBound=true;
+    document.addEventListener('visibilitychange',function(){
+      if(!document.hidden && currentUser && supa) loadFromCloud();
+    });
+  }
+}
+
 // ── Gmail notification via Supabase Edge Function ──
 // EmailJS config — free service, sends directly to Gmail from browser
 // Service ID and template from emailjs.com dashboard
@@ -2108,6 +2125,7 @@ function launchApp(role,name){
   // Then load from cloud and refresh (async)
   loadFromCloud();
   subscribeToRealtime();
+  startAutoRefresh();
   // Send login notification for non-owners
   if(role!=='owner'){
     sendEmailNotification(
