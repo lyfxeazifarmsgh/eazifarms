@@ -608,6 +608,77 @@ label{display:block;font-size:.72rem;color:var(--muted);margin-bottom:.28rem;fon
 
     </div>
 
+    <!-- INVOICES PAGE -->
+    <div class="page" id="page-invoices">
+
+      <!-- Stats -->
+      <div class="metrics-grid" id="invoice-metrics"></div>
+
+      <!-- Create Invoice -->
+      <div class="card">
+        <div class="card-title">&#x1F4CB; Create New Invoice</div>
+        <div class="form-row">
+          <div><label>Customer Name</label><input type="text" id="inv-customer" placeholder="Full name / Company"></div>
+          <div><label>Customer Phone</label><input type="tel" id="inv-phone" placeholder="024XXXXXXX"></div>
+        </div>
+        <div class="form-row full"><div><label>Customer Address (optional)</label><input type="text" id="inv-address" placeholder="Location or address"></div></div>
+        <div class="form-row">
+          <div><label>Invoice Date</label><input type="date" id="inv-date"></div>
+          <div><label>Due Date</label><input type="date" id="inv-due"></div>
+        </div>
+        <div class="form-row">
+          <div><label>Season</label>
+            <select id="inv-season">
+              <option value="Christmas/New Year 2026">&#x1F384; Christmas/New Year 2026</option>
+              <option value="Eid al-Adha 2026">&#x1F411; Eid al-Adha 2026</option>
+              <option value="Eid al-Fitr 2026">&#x1F319; Eid al-Fitr 2026</option>
+              <option value="Christmas/New Year 2025">&#x1F384; Christmas/New Year 2025</option>
+              <option value="Eid al-Adha 2025">&#x1F411; Eid al-Adha 2025</option>
+              <option value="Eid al-Fitr 2025">&#x1F319; Eid al-Fitr 2025</option>
+              <option value="General">General</option>
+            </select>
+          </div>
+          <div><label>Amount Paid (GHS)</label><input type="number" id="inv-paid" placeholder="0.00" min="0" step="0.01"></div>
+        </div>
+
+        <!-- Line items -->
+        <div style="margin:.5rem 0 .5rem">
+          <label>Items</label>
+          <div id="inv-items-list"></div>
+          <button type="button" id="inv-add-item-btn" class="btn-save" style="background:#f0f7f1;color:#1a5c2a;border:1.5px solid #dde8dd;margin-top:.4rem;font-size:.82rem;padding:.5rem">+ Add Item</button>
+        </div>
+
+        <!-- Totals -->
+        <div id="inv-totals-preview" style="display:none;background:#f8f8f8;border-radius:10px;padding:.85rem;margin:.75rem 0">
+          <div class="sum-row"><span>Subtotal</span><span id="inv-subtotal-val">GHS 0.00</span></div>
+          <div class="sum-row" style="display:flex;align-items:center;gap:.5rem">
+            <span>Discount (GHS)</span>
+            <input type="number" id="inv-discount" placeholder="0" min="0" step="0.01" oninput="calcInvTotal()" style="width:100px;padding:.3rem .5rem;font-size:.85rem">
+          </div>
+          <div class="sum-row"><span><strong>Total</strong></span><span id="inv-total-val" style="color:#1a5c2a;font-weight:800">GHS 0.00</span></div>
+          <div class="sum-row"><span>Paid</span><span id="inv-paid-val" style="color:#1a5c2a">GHS 0.00</span></div>
+          <div class="sum-row"><span><strong>Balance Due</strong></span><span id="inv-balance-val" style="color:#c0392b;font-weight:800">GHS 0.00</span></div>
+        </div>
+
+        <div class="form-row full"><div><label>Notes</label><textarea id="inv-notes" placeholder="Payment terms, delivery info..."></textarea></div></div>
+        <button type="button" id="inv-save-btn" class="btn-save">&#x1F4CB; Create Invoice</button>
+      </div>
+
+      <!-- Invoice list -->
+      <div id="invoice-list"></div>
+    </div>
+
+    <!-- INVOICE PRINT MODAL -->
+    <div class="modal-overlay hidden" id="invoice-modal">
+      <div class="modal-box" style="padding:0;border-radius:16px;overflow:hidden">
+        <div id="invoice-print-area"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;padding:1rem">
+          <button type="button" class="btn-save" onclick="printInvoice()">&#x1F5A8;&#xFE0F; Print / Save PDF</button>
+          <button type="button" class="btn-save" style="background:#888" onclick="closeInvoiceModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
     <!-- OWNER: PENDING APPROVALS (shown in dashboard for owner) -->
     <div class="page" id="page-approvals">
       <div class="card">
@@ -676,7 +747,7 @@ var NET_TEXT ={MTN:'#000',Vodafone:'#fff',AirtelTigo:'#fff'};
 var ANIMAL_EMOJI={Cattle:'\uD83D\uDC04',Goat:'\uD83D\uDC10',Sheep:'\uD83D\uDC11',Camel:'\uD83D\uDC2A',Turkey:'\uD83E\uDD83',Chicken:'\uD83D\uDC14'};
 
 var currentUser=null, activeFilter='all', animalFilter='all', currentPhotoData=null;
-var entries=[], workers=[], animals=[], pendingEntries=[], partnerAnimals=[], salesDebts=[];
+var entries=[], workers=[], animals=[], pendingEntries=[], partnerAnimals=[], salesDebts=[], invoices=[];
 // Data loaded from Supabase cloud in launchApp()
 
 // save() defined below with Supabase cloud sync
@@ -734,6 +805,8 @@ function buildNav(){
   var h=btn('dashboard',SVG_DASH,'Dashboard')+btn('add',SVG_ADD,'Add')+btn('ledger',SVG_LED,'Ledger')+btn('payroll',SVG_PAY,'Payroll')+btn('livestock',SVG_LIV,'Livestock')+btn('overhead',SVG_OVR,'Overhead')+btn('reports',SVG_RPT,'Reports');
   var SVG_SALES='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>';
   var SVG_APPROVE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+  var SVG_INV='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
+  h+=btn('invoices',SVG_INV,'Invoices');
   h+=btn('sales',SVG_SALES,'Sales/Debts');
   h+=btn('approvals',SVG_APPROVE,'Approvals');
   if(ROLES[currentUser].settings) h+=btn('settings',SVG_COG,'Settings');
@@ -756,6 +829,8 @@ function showPage(name,btn){
   }
   if(currentUser==='assistant'){renderLivestock();return;}
   if(name==='approvals') renderApprovals();
+  if(name==='invoices'){renderInvoices();renderInvItems();}
+  if(name==='invoices'){renderInvoices();renderInvItems();}
   renderAll();
 }
 
@@ -830,23 +905,37 @@ function saveEntry(){
   }
   entries.unshift(entry);
   // Sync to Supabase immediately
+  if(!supa) initSupabase();
   if(supa){
-    supa.from('entries').insert([{
+    var syncData = {
       id:entry.id, type:entry.type, date:entry.date, cat:entry.cat,
       amount:entry.amount, description:entry.desc||'', party:entry.party||'',
       qty:entry.qty||'', notes:entry.notes||'',
       user_role:entry.user||currentUser, partner_name:entry.partnerName||'',
       status:'approved'
-    }]).then(function(){
-      if(currentUser!=='owner'){
-        sendEmailNotification(
-          'Eazi Farms: New '+entry.type+' entry — GHS '+entry.amount,
-          (ROLES[currentUser]?ROLES[currentUser].label:currentUser)+' logged:\n'+
-          'Category: '+entry.cat+'\nAmount: GHS '+entry.amount+
-          '\nDesc: '+(entry.desc||'')+'\nDate: '+entry.date
-        );
+    };
+    supa.from('entries').insert([syncData]).then(function(res){
+      if(res.error){
+        console.log('Supabase insert error:', JSON.stringify(res.error));
+        // Retry once
+        supa.from('entries').upsert([syncData]);
+      } else {
+        console.log('Entry synced to cloud:', entry.id);
+        if(currentUser!=='owner'){
+          sendEmailNotification(
+            'Eazi Farms: New '+entry.type+' — GHS '+entry.amount,
+            (ROLES[currentUser]?ROLES[currentUser].label:currentUser)+' logged:\n'+
+            'Category: '+entry.cat+'\nAmount: GHS '+entry.amount+
+            '\nDesc: '+(entry.desc||'')+'\nDate: '+entry.date+
+            '\nLogged at: '+new Date().toLocaleString()
+          );
+        }
       }
+    }).catch(function(e){
+      console.log('Supabase sync exception:', e.message||e);
     });
+  } else {
+    console.log('Supabase not ready - entry saved locally only');
   }
   save();
   ['ent-amount','ent-desc','ent-party','ent-qty','ent-notes'].forEach(function(id){document.getElementById(id).value='';});
@@ -1066,7 +1155,7 @@ function setFilter(f,el){
   document.querySelectorAll('#page-ledger .filter-chip').forEach(function(c){c.classList.remove('active');});
   el.classList.add('active');renderLedger();
 }
-function renderAll(){renderDashboard();renderLedger();renderPayroll();renderLivestock();renderOverhead();renderReports();renderSalesPage();if(currentUser==='owner'||currentUser==='manager'){renderApprovals();}}
+function renderAll(){renderDashboard();renderLedger();renderPayroll();renderLivestock();renderOverhead();renderReports();renderSalesPage();renderInvoices();if(currentUser==='owner'||currentUser==='manager'){renderApprovals();}}
 
 // ============ DASHBOARD ============
 function renderDashboard(){
@@ -1648,6 +1737,7 @@ function save(){
   localStorage.setItem('ef_pending',       JSON.stringify(pendingEntries));
   localStorage.setItem('ef_partnerAnimals',JSON.stringify(partnerAnimals));
   localStorage.setItem('ef_salesDebts',    JSON.stringify(salesDebts));
+  localStorage.setItem('ef_invoices',      JSON.stringify(invoices));
   localStorage.setItem('ef_pins',          JSON.stringify(PINS));
   // Then sync to cloud if available
   if(supa) syncToCloud();
@@ -1764,6 +1854,7 @@ function loadFromCloud(){
 }
 
 function loadFromLocal(){
+  try{invoices=JSON.parse(localStorage.getItem('ef_invoices')||'[]');}catch(e){}
   try{entries=JSON.parse(localStorage.getItem('ef_entries')||'[]');}catch(e){}
   try{workers=JSON.parse(localStorage.getItem('ef_workers')||'[]');}catch(e){}
   try{animals=JSON.parse(localStorage.getItem('ef_animals')||'[]');}catch(e){}
@@ -1775,29 +1866,39 @@ function loadFromLocal(){
 // ── Real-time subscriptions ──
 function subscribeToRealtime(){
   if(!supa) return;
-  supa.channel('eazifarms')
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'entries'},function(payload){
-      var e=payload.new;
-      var newEntry={id:e.id,type:e.type,date:e.date,cat:e.cat,amount:e.amount,
-        desc:e.description,party:e.party,qty:e.qty,notes:e.notes,
-        user:e.user_role,partnerName:e.partner_name};
-      if(!entries.find(function(x){return x.id===e.id;})){
-        entries.unshift(newEntry);
-        renderAll();
-        toast('New entry synced from '+( e.user_role||'team'));
+  console.log('Setting up real-time sync...');
+  supa.channel('eazifarms-'+Date.now())
+    .on('postgres_changes',{event:'*',schema:'public',table:'entries'},function(payload){
+      console.log('Real-time entry event:', payload.eventType);
+      if(payload.eventType==='INSERT'){
+        var e=payload.new;
+        if(!entries.find(function(x){return x.id===e.id;})){
+          entries.unshift({id:e.id,type:e.type,date:e.date,cat:e.cat,amount:e.amount,
+            desc:e.description,party:e.party,qty:e.qty,notes:e.notes,
+            user:e.user_role,partnerName:e.partner_name});
+          localStorage.setItem('ef_entries',JSON.stringify(entries));
+          renderAll();
+          if(e.user_role!==currentUser) toast('\uD83D\uDCF2 New entry from '+(e.user_role||'team'));
+        }
       }
     })
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'pending_entries'},function(payload){
-      var e=payload.new;
-      if(!pendingEntries.find(function(x){return x.id===e.id;})){
-        pendingEntries.unshift({id:e.id,type:e.type,date:e.date,cat:e.cat,amount:e.amount,
-          desc:e.description,party:e.party,qty:e.qty,notes:e.notes,
-          user:e.user_role,partnerName:e.partner_name,status:'pending'});
-        renderAll();
-        if(currentUser==='owner') toast('Partner submitted entry for approval!');
+    .on('postgres_changes',{event:'*',schema:'public',table:'pending_entries'},function(payload){
+      if(payload.eventType==='INSERT'){
+        var e=payload.new;
+        if(!pendingEntries.find(function(x){return x.id===e.id;})){
+          pendingEntries.unshift({id:e.id,type:e.type,date:e.date,cat:e.cat,
+            amount:e.amount,desc:e.description,party:e.party,
+            qty:e.qty,notes:e.notes,user:e.user_role,
+            partnerName:e.partner_name,status:'pending'});
+          localStorage.setItem('ef_pending',JSON.stringify(pendingEntries));
+          renderAll();
+          if(currentUser==='owner') toast('\u23F3 Partner submitted entry for approval!');
+        }
       }
     })
-    .subscribe();
+    .subscribe(function(status){
+      console.log('Real-time subscription status:', status);
+    });
 }
 
 // ── Gmail notification via Supabase Edge Function ──
@@ -1912,6 +2013,8 @@ function launchApp(role,name){
   if(b)b.textContent=(role==='partner'&&name)?name+' (Partner)':(ROLES[role]?ROLES[role].label:role);
   var bn=document.getElementById('assistant-banner');
   if(bn)bn.style.display=(role==='assistant')?'block':'none';
+  // Init Supabase first
+  if(!supa) initSupabase();
   // Init app with local data first (instant)
   initApp();
   // Then load from cloud and refresh (async)
@@ -1933,6 +2036,40 @@ function clearPartnerAccount(){localStorage.removeItem('ef_partner_acct');}
 // Attach all button events
 window.addEventListener('load',function(){
   initSupabase();
+  // Invoice buttons
+  var invSaveBtn = document.getElementById('inv-save-btn');
+  if(invSaveBtn){invSaveBtn.addEventListener('click',saveInvoice);invSaveBtn.addEventListener('touchend',function(e){e.preventDefault();saveInvoice();});}
+  var invAddItem = document.getElementById('inv-add-item-btn');
+  if(invAddItem){invAddItem.addEventListener('click',addInvItem);invAddItem.addEventListener('touchend',function(e){e.preventDefault();addInvItem();});}
+
+  // Invoice modal close
+  var invModal = document.getElementById('invoice-modal');
+  if(invModal) invModal.addEventListener('click',function(e){if(e.target===this)closeInvoiceModal();});
+
+  // Init invoice items
+  renderInvItems();
+
+  // Invoice dates
+  var invDate=document.getElementById('inv-date');if(invDate)invDate.value=new Date().toISOString().split('T')[0];
+  var invDue=document.getElementById('inv-due');
+  if(invDue){var d=new Date();d.setDate(d.getDate()+14);invDue.value=d.toISOString().split('T')[0];}
+
+  // Load invoices from local
+  try{invoices=JSON.parse(localStorage.getItem('ef_invoices')||'[]');}catch(e){}
+
+  // Invoice buttons
+  var invSaveBtn=document.getElementById('inv-save-btn');
+  if(invSaveBtn){invSaveBtn.addEventListener('click',saveInvoice);invSaveBtn.addEventListener('touchend',function(e){e.preventDefault();saveInvoice();});}
+  var invAddBtn=document.getElementById('inv-add-item-btn');
+  if(invAddBtn){invAddBtn.addEventListener('click',addInvItem);invAddBtn.addEventListener('touchend',function(e){e.preventDefault();addInvItem();});}
+  var invModal=document.getElementById('invoice-modal');
+  if(invModal) invModal.addEventListener('click',function(e){if(e.target===this)closeInvoiceModal();});
+  try{invoices=JSON.parse(localStorage.getItem('ef_invoices')||'[]');}catch(e){}
+  renderInvItems();
+  var invD=document.getElementById('inv-date');if(invD)invD.value=new Date().toISOString().split('T')[0];
+  var invDue=document.getElementById('inv-due');
+  if(invDue){var dd=new Date();dd.setDate(dd.getDate()+14);invDue.value=dd.toISOString().split('T')[0];}
+
   // Bulk sale button
   var bsBtn = document.getElementById('bulk-save-btn');
   if(bsBtn){ bsBtn.addEventListener('click',saveBulkSale); bsBtn.addEventListener('touchend',function(e){e.preventDefault();saveBulkSale();}); }
