@@ -1625,13 +1625,17 @@ var SUPA_URL  = 'https://zzepnbvfczoommdcyver.supabase.co';
 var SUPA_ANON = 'sb_publishable_hGjGAnDtqJFIT4-1zTxbnw_KKnYd2Eb';
 var supa = null;
 
-// Initialize EmailJS
+// Initialize EmailJS with private key (bypasses domain restriction)
 (function initEJS(){
   if(typeof emailjs !== 'undefined'){
-    emailjs.init({publicKey:'CSZilQ1aZIrJQ9Ono', blockHeadless:false});
-    console.log('EmailJS ready');
+    emailjs.init({
+      publicKey:  'CSZilQ1aZIrJQ9Ono',
+      privateKey: 'x4a54sYpPBonSoiWav2sp',
+      blockHeadless: false,
+      limitRate: { id: 'app', throttle: 10000 }
+    });
+    console.log('EmailJS ready with private key');
   } else {
-    // Retry after script loads
     setTimeout(initEJS, 500);
   }
 })();
@@ -1837,17 +1841,28 @@ function sendEmailNotification(subject, msgBody){
         subject:subject,
         message:msgBody,
         from_name:'Eazi Farms Ghana'
-      }).then(function(r){
-        console.log('Email sent OK:', r.status);
+      },'CSZilQ1aZIrJQ9Ono').then(function(r){
+        console.log('Email sent OK:', r.status, r.text);
       }, function(e){
         console.log('EmailJS SDK error:', JSON.stringify(e));
-        // Fallback: direct fetch without origin header
+        // Fallback: direct REST API with private key
         fetch('https://api.emailjs.com/api/v1.0/email/send',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify(ejsPayload)
+          body:JSON.stringify({
+            service_id:  'Eazifarms_service',
+            template_id: 'eazifarms_notify',
+            user_id:     'CSZilQ1aZIrJQ9Ono',
+            accessToken: 'x4a54sYpPBonSoiWav2sp',
+            template_params:{
+              to_email:'lyfxeazifarmsgh@gmail.com',
+              subject:subject,
+              message:msgBody,
+              from_name:'Eazi Farms Ghana'
+            }
+          })
         }).then(function(r2){
-          r2.text().then(function(t){ console.log('Fetch fallback:',r2.status,t); });
+          r2.text().then(function(t){ console.log('Fetch result:',r2.status,t); });
         }).catch(function(e2){ console.log('Fetch error:',e2); });
       });
     } else {
