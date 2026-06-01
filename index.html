@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<!-- EmailJS removed - using Google Apps Script -->
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1a5c2a">
@@ -1625,20 +1625,8 @@ var SUPA_URL  = 'https://zzepnbvfczoommdcyver.supabase.co';
 var SUPA_ANON = 'sb_publishable_hGjGAnDtqJFIT4-1zTxbnw_KKnYd2Eb';
 var supa = null;
 
-// Initialize EmailJS with private key (bypasses domain restriction)
-(function initEJS(){
-  if(typeof emailjs !== 'undefined'){
-    emailjs.init({
-      publicKey:  'CSZilQ1aZIrJQ9Ono',
-      privateKey: 'x4a54sYpPBonSoiWav2sp',
-      blockHeadless: false,
-      limitRate: { id: 'app', throttle: 10000 }
-    });
-    console.log('EmailJS ready with private key');
-  } else {
-    setTimeout(initEJS, 500);
-  }
-})();
+// Email via Google Apps Script (no CORS issues)
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbxq-3UM1YAKTEbjkSXX4J95fKhb9cbSfiOJrbUoIR5pYgsYE5s-Lz7NpSb0VSxfvtiU/exec';
 
 function initSupabase(){
   try{
@@ -1821,59 +1809,15 @@ var EJS_PUBLIC   = 'CSZilQ1aZIrJQ9Ono';
 
 function sendEmailNotification(subject, msgBody){
   try{
-    // Use fetch directly to EmailJS API - works from any domain
-    // EmailJS - non-browser mode (no domain restriction)
-    var ejsPayload = {
-      service_id:  'Eazifarms_service',
-      template_id: 'eazifarms_notify',
-      user_id:     'CSZilQ1aZIrJQ9Ono',
-      template_params: {
-        to_email:  'lyfxeazifarmsgh@gmail.com',
-        subject:   subject,
-        message:   msgBody,
-        from_name: 'Eazi Farms Ghana'
-      }
-    };
-    // Try emailjs SDK first
-    if(typeof emailjs !== 'undefined'){
-      emailjs.send('Eazifarms_service','eazifarms_notify',{
-        to_email:'lyfxeazifarmsgh@gmail.com',
-        subject:subject,
-        message:msgBody,
-        from_name:'Eazi Farms Ghana'
-      },'CSZilQ1aZIrJQ9Ono').then(function(r){
-        console.log('Email sent OK:', r.status, r.text);
-      }, function(e){
-        console.log('EmailJS SDK error:', JSON.stringify(e));
-        // Fallback: direct REST API with private key
-        fetch('https://api.emailjs.com/api/v1.0/email/send',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({
-            service_id:  'Eazifarms_service',
-            template_id: 'eazifarms_notify',
-            user_id:     'CSZilQ1aZIrJQ9Ono',
-            accessToken: 'x4a54sYpPBonSoiWav2sp',
-            template_params:{
-              to_email:'lyfxeazifarmsgh@gmail.com',
-              subject:subject,
-              message:msgBody,
-              from_name:'Eazi Farms Ghana'
-            }
-          })
-        }).then(function(r2){
-          r2.text().then(function(t){ console.log('Fetch result:',r2.status,t); });
-        }).catch(function(e2){ console.log('Fetch error:',e2); });
-      });
-    } else {
-      fetch('https://api.emailjs.com/api/v1.0/email/send',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(ejsPayload)
-      }).then(function(r){
-        r.text().then(function(t){ console.log('Email response:',r.status,t); });
-      }).catch(function(e){ console.log('Email fetch error:',e); });
-    }
+    if(!GAS_URL || GAS_URL === 'GOOGLE_SCRIPT_URL') return;
+    // Google Apps Script webhook - no CORS issues
+    var url = GAS_URL
+      + '?to=lyfxeazifarmsgh%40gmail.com'
+      + '&subject=' + encodeURIComponent(subject)
+      + '&body=' + encodeURIComponent(msgBody);
+    fetch(url, {method:'GET', mode:'no-cors'})
+      .then(function(){ console.log('Email notification sent'); })
+      .catch(function(e){ console.log('Email error:',e); });
   } catch(e){ console.log('Email error:',e); }
 }
 
