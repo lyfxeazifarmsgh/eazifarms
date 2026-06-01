@@ -978,6 +978,7 @@ function addWorker(){
 function removeWorker(id){
   if(!ROLES[currentUser].canDelete){toast('\u26D4 No permission');return;}
   workers=workers.filter(function(w){return w.id!==id;});save();renderPayroll();
+  if(supa)supa.from('workers').delete().eq('id',id);
 }
 function markAllPaid(){
   if(!workers.length){toast('No workers added yet');return;}
@@ -1095,6 +1096,7 @@ function removeAnimal(id){
   if(!ROLES[currentUser].canDelete){toast('\u26D4 No permission');return;}
   if(!confirm('Remove this animal?'))return;
   animals=animals.filter(function(a){return a.id!==id;});save();renderLivestock();
+  if(supa){supa.from('animals').delete().eq('id',id);supa.from('partner_animals').delete().eq('id',id);}
   document.getElementById('animal-modal').classList.add('hidden');toast('Animal removed');
 }
 function closeAnimalModal(){document.getElementById('animal-modal').classList.add('hidden');}
@@ -1253,6 +1255,7 @@ function renderLedger(){
 function delEntry(id){
   if(!ROLES[currentUser].canDelete){toast('\u26D4 No permission');return;}
   entries=entries.filter(function(e){return e.id!==id;});save();renderAll();toast('Entry deleted');
+  if(supa){supa.from('entries').delete().eq('id',id);supa.from('pending_entries').delete().eq('id',id);}
 }
 
 // ============ REPORTS ============
@@ -1305,6 +1308,11 @@ function changePIN(){
 function clearAllData(){
   if(!confirm('\u26A0\uFE0F DELETE ALL FARM RECORDS, WORKERS and LIVESTOCK?\n\nThis CANNOT be undone!'))return;
   entries=[];workers=[];animals=[];save();renderAll();toast('All data cleared');
+  if(supa){
+    ['entries','pending_entries','workers','animals','partner_animals'].forEach(function(t){
+      supa.from(t).delete().neq('id',0);
+    });
+  }
 }
 
 // ============ CSV ============
@@ -1548,6 +1556,7 @@ function deleteSaleDebt(id){
   if(!ROLES[currentUser].canDelete){toast('\u26D4 No permission');return;}
   salesDebts = salesDebts.filter(function(r){return r.id!==id;});
   save(); renderSalesPage();
+  if(supa)supa.from('sales_debts').delete().eq('id',id);
   toast('Record deleted');
 }
 
